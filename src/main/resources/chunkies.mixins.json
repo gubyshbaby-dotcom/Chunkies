@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.chunkies.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ChunkHolderMixin",
+    "ChunkMapMixin",
+    "ChunkSerializerAccessor",
+    "ChunkSerializerMixin",
+    "ChunkStatusTasksMixin",
+    "DistanceManagerMixin",
+    "LayerLightSectionStorageMixin",
+    "PlayerChunkSenderMixin",
+    "ServerChunkCacheMixin",
+    "StructureGenerationStubMixin",
+    "StructureStartMixin",
+    "ThreadedLevelLightEngineMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
