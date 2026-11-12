@@ -50,7 +50,7 @@ public final class ChunkiesConfig {
                         "Vanilla hard-codes 4, which makes chunk loading wait on thread hand-offs instead of using the CPU.",
                         "Chunks are still handed out nearest-to-the-player first, so larger values load the same area,",
                         "just with more of it in flight at once.",
-                        "0 = automatic (scales with the number of world generation threads). Requires a server restart.")
+                        "0 = automatic (32 per world generation thread, at least 64). Requires a server restart.")
                 .defineInRange("playerTicketConcurrency", 0, 0, 65536);
         b.pop();
 
@@ -158,6 +158,8 @@ public final class ChunkiesConfig {
         if (configured > 0) {
             return configured;
         }
-        return Math.min(512, Math.max(32, 8 * resolvedWorldgenThreads()));
+        // Enough chunks in flight to keep every worker fed (measured: ~32 per worker); more only blurs the
+        // nearest-first order the throttler provides.
+        return Math.min(512, Math.max(64, 32 * resolvedWorldgenThreads()));
     }
 }

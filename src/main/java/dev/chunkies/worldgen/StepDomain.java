@@ -1,6 +1,8 @@
 package dev.chunkies.worldgen;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.server.level.ServerPlayer;
@@ -8,17 +10,19 @@ import net.minecraft.world.level.ChunkPos;
 
 /**
  * Per-dimension state of the {@link ChunkStepScheduler}: which chunk positions are currently locked by a
- * running generation step, how many steps of this dimension are queued or running, and where the players are
- * (used to run the steps closest to a player first).
+ * running generation step, which steps are waiting for one of those locks, how many steps of this dimension
+ * are queued or running, and where the players are (used to work on the chunks closest to a player first).
  */
 public final class StepDomain {
     /** Chunk positions locked by running steps. Guarded by the scheduler mutex. */
     final LongOpenHashSet locked = new LongOpenHashSet();
+    /** Steps parked until the given chunk position is unlocked. Guarded by the scheduler mutex. */
+    final Long2ObjectOpenHashMap<ArrayList<ChunkStepScheduler.Step>> waiters = new Long2ObjectOpenHashMap<>();
     /** Steps of this dimension that are queued or running. */
     final AtomicInteger inFlight = new AtomicInteger();
 
     private volatile long[] playerChunks = new long[0];
-    private volatile int playersVersion;
+    private int ticksSinceRefresh;
 
     public boolean hasWork() {
         return this.inFlight.get() > 0;
@@ -40,12 +44,15 @@ public final class StepDomain {
         }
         if (changed) {
             this.playerChunks = now;
-            this.playersVersion++;
         }
-    }
-
-    int playersVersion() {
-        return this.playersVersion;
+        // Tickets can also change without anybody moving (force-loading, view distance), so refresh the
+        // queue's priorities once a second regardless.
+        if (changed || ++this.ticksSinceRefresh >= 20) {
+            this.ticksSinceRefresh = 0;
+            if (this.hasWork()) {
+                ChunkStepScheduler.prioritiesChanged();
+            }
+        }
     }
 
     /** Chebyshev distance (in chunks) from the given chunk to the closest player, or 0 if nobody is around. */

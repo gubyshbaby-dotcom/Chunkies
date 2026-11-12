@@ -2,6 +2,7 @@ package dev.chunkies;
 
 import com.mojang.logging.LogUtils;
 import dev.chunkies.config.ChunkiesConfig;
+import dev.chunkies.worldgen.ChunkStepScheduler;
 import dev.chunkies.worldgen.WorkerGovernor;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -11,6 +12,7 @@ import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
 
@@ -28,6 +30,7 @@ public final class Chunkies {
         NeoForge.EVENT_BUS.addListener((ServerTickEvent.Pre event) -> WorkerGovernor.tickStart());
         NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> WorkerGovernor.tickEnd(event.getServer()));
         NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent event) -> logSettings());
+        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> ChunkStepScheduler.reset());
     }
 
     private void onConfigLoad(ModConfigEvent.Loading event) {

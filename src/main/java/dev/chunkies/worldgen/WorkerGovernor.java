@@ -18,7 +18,9 @@ import net.minecraft.server.MinecraftServer;
  * reasons of their own keeps all its workers - taking them away would not help it.</p>
  */
 public final class WorkerGovernor {
-    private static final int SAMPLE_TICKS = 20;
+    private static final long SAMPLE_NANOS = 1_000_000_000L;
+    /** Workers are given back only after this many calm samples in a row; they are taken away at once. */
+    private static final int CALM_SAMPLES_TO_RECOVER = 3;
     private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
     private static final boolean CPU_TIME_SUPPORTED = cpuTimeSupported();
 
@@ -27,6 +29,8 @@ public final class WorkerGovernor {
     private static long wallSum;
     private static long cpuSum;
     private static int ticks;
+    private static long sampleStart;
+    private static int calmSamples;
 
     private WorkerGovernor() {
     }
@@ -59,10 +63,16 @@ public final class WorkerGovernor {
         }
         wallSum += System.nanoTime() - tickStartWall;
         cpuSum += THREADS.getCurrentThreadCpuTime() - tickStartCpu;
+        long now = System.nanoTime();
         tickStartWall = 0L;
-        if (++ticks < SAMPLE_TICKS) {
+        ticks++;
+        if (sampleStart == 0L) {
+            sampleStart = now;
+        }
+        if (now - sampleStart < SAMPLE_NANOS) {
             return;
         }
+        sampleStart = now;
         double budgetMillis = server.tickRateManager().nanosecondsPerTick() / 1.0e6;
         double tickMillis = wallSum / 1.0e6 / ticks;
         double cpuShare = wallSum > 0L ? (double) cpuSum / (double) wallSum : 1.0;
@@ -74,6 +84,15 @@ public final class WorkerGovernor {
         }
         int active = ChunkStepScheduler.activeSlots();
         int decision = decide(active, ChunkStepScheduler.workerCount(), tickMillis, budgetMillis, cpuShare);
+        if (decision > active) {
+            // Give workers back slowly, so a tick that is only just coping does not make the count flap.
+            if (++calmSamples < CALM_SAMPLES_TO_RECOVER) {
+                return;
+            }
+            calmSamples = 0;
+        } else {
+            calmSamples = 0;
+        }
         if (decision != active) {
             ChunkStepScheduler.setActiveSlots(decision);
             Chunkies.LOGGER.debug(
