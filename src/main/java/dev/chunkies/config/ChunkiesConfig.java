@@ -21,6 +21,8 @@ public final class ChunkiesConfig {
     private static final ModConfigSpec.BooleanValue OFF_THREAD_PARSING;
     private static final ModConfigSpec.BooleanValue EAGER_LIGHT;
     private static final ModConfigSpec.BooleanValue SKIP_REDUNDANT_SAVES;
+    private static final ModConfigSpec.IntValue DISPATCH_BATCH;
+    private static final ModConfigSpec.IntValue LATE_TICK_ALLOWANCE;
     private static final ModConfigSpec.BooleanValue SEND_BOOST;
     private static final ModConfigSpec.DoubleValue SEND_RATE_MULTIPLIER;
     private static final ModConfigSpec.DoubleValue SEND_MIN_CHUNKS_PER_TICK;
@@ -35,6 +37,8 @@ public final class ChunkiesConfig {
     public static volatile boolean offThreadParsing = true;
     public static volatile boolean eagerLight = true;
     public static volatile boolean skipRedundantSaves = true;
+    public static volatile int dispatchBatch = 32;
+    public static volatile int lateTickAllowanceMillis = 25;
     public static volatile boolean sendBoost = true;
     public static volatile float sendRateMultiplier = 2.0F;
     public static volatile float sendMinChunksPerTick = 8.0F;
@@ -104,6 +108,24 @@ public final class ChunkiesConfig {
                 .define("skipRedundantSaves", true);
         b.pop();
 
+        b.comment("The internal queues that pass chunk work between threads.").push("pipeline");
+        DISPATCH_BATCH = b
+                .comment(
+                        "How many chunks' worth of tasks are handed to the server thread per hand-off. Vanilla hands",
+                        "over one chunk, waits for it to report back and only then hands over the next, so finished",
+                        "chunks queue up for the server thread while it is mostly idle. Tasks are still taken in",
+                        "priority order. 1 = vanilla.")
+                .defineInRange("dispatchBatch", 32, 1, 1024);
+        LATE_TICK_ALLOWANCE = b
+                .comment(
+                        "How many milliseconds waiting chunk tasks may delay the start of the next tick. Vanilla allows",
+                        "a whole tick (50). That is harmless while its queues starve the server thread, but with a",
+                        "steady supply of chunk work it would cost TPS whenever chunks are loading. Chunk tasks always",
+                        "get the time that is left over in a tick; this only limits how far they may run past it.",
+                        "Lower = steadier TPS, higher = chunks win when the server thread is the bottleneck.")
+                .defineInRange("lateTickAllowanceMs", 25, 0, 1000);
+        b.pop();
+
         b.comment(
                         "Sending of ready chunks to players. Vanilla sends as many chunks per tick as the player's client",
                         "asked for (the client budgets only a few milliseconds per tick for this) and never more than 64.")
@@ -140,6 +162,8 @@ public final class ChunkiesConfig {
         offThreadParsing = OFF_THREAD_PARSING.get();
         eagerLight = EAGER_LIGHT.get();
         skipRedundantSaves = SKIP_REDUNDANT_SAVES.get();
+        dispatchBatch = DISPATCH_BATCH.get();
+        lateTickAllowanceMillis = LATE_TICK_ALLOWANCE.get();
         sendBoost = SEND_BOOST.get();
         sendRateMultiplier = SEND_RATE_MULTIPLIER.get().floatValue();
         sendMinChunksPerTick = SEND_MIN_CHUNKS_PER_TICK.get().floatValue();
